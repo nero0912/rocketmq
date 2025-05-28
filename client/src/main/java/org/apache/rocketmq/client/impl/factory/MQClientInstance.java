@@ -114,6 +114,8 @@ public class MQClientInstance {
     private final MQAdminImpl mQAdminImpl;
     private final ConcurrentMap<String/* Topic */, TopicRouteData> topicRouteTable = new ConcurrentHashMap<>();
     private final ConcurrentMap<String/* Topic */, ConcurrentMap<MessageQueue, String/*brokerName*/>> topicEndPointsTable = new ConcurrentHashMap<>();
+
+    private final ConcurrentMap<String, Set<String>> brokerToTopicTable = new ConcurrentHashMap<>();
     private final Lock lockNamesrv = new ReentrantLock();
     private final Lock lockHeartbeat = new ReentrantLock();
 
@@ -845,6 +847,7 @@ public class MQClientInstance {
                             TopicRouteData cloneTopicRouteData = new TopicRouteData(topicRouteData);
                             log.info("topicRouteTable.put. Topic = {}, TopicRouteData[{}]", topic, cloneTopicRouteData);
                             this.topicRouteTable.put(topic, cloneTopicRouteData);
+                            updateBrokerToTopicTable(topic, topicRouteData);
                             return true;
                         }
                     } else {
@@ -1410,5 +1413,11 @@ public class MQClientInstance {
             data = this.getAnExistTopicRouteData(topic);
         }
         return data;
+    }
+
+    protected void updateBrokerToTopicTable(String topic, TopicRouteData topicRouteData) {
+        topicRouteData.getBrokerDatas().forEach(brokerData ->
+                this.brokerToTopicTable.computeIfAbsent(brokerData.getBrokerName(), k -> new HashSet<>()).add(topic)
+        );
     }
 }

@@ -21,8 +21,12 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 
 import java.time.Duration;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -52,6 +56,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 public abstract class TopicRouteService extends AbstractStartAndShutdown {
     private static final Logger log = LoggerFactory.getLogger(LoggerName.PROXY_LOGGER_NAME);
+
+    private final ConcurrentMap<String, Set<String>> brokerToTopicTable = new ConcurrentHashMap<>();
 
     private final MQClientAPIFactory mqClientAPIFactory;
     private MQFaultStrategy mqFaultStrategy;
@@ -85,6 +91,7 @@ public abstract class TopicRouteService extends AbstractStartAndShutdown {
                 public @Nullable MessageQueueView load(String topic) throws Exception {
                     try {
                         TopicRouteData topicRouteData = mqClientAPIFactory.getClient().getTopicRouteInfoFromNameServer(topic, Duration.ofSeconds(3).toMillis());
+                        updateBrokerToTopicTable(topic, topicRouteData);
                         return buildMessageQueueView(topic, topicRouteData);
                     } catch (Exception e) {
                         if (TopicRouteHelper.isTopicNotExistError(e)) {
@@ -225,5 +232,11 @@ public abstract class TopicRouteService extends AbstractStartAndShutdown {
             return tmp;
         }
         return MessageQueueView.WRAPPED_EMPTY_QUEUE;
+    }
+
+    protected void updateBrokerToTopicTable(String topic, TopicRouteData topicRouteData) {
+        topicRouteData.getBrokerDatas().forEach(brokerData ->
+                this.brokerToTopicTable.computeIfAbsent(brokerData.getBrokerName(), k -> new HashSet<>()).add(topic)
+        );
     }
 }
